@@ -406,6 +406,31 @@ footer { text-align:center; margin-top:30px; }
   text-transform:uppercase; color:var(--credit-c);
 }
 
+/* Shown only when the page cannot run — must not depend on the theme tokens
+   above being applied, so it carries its own colours. */
+.jswarn {
+  max-width:560px;
+  margin:16px auto;
+  padding:16px 18px;
+  border:1px solid #7a5a35;
+  border-radius:14px;
+  background:#241c10;
+  color:#f0e3cb;
+  font-family:var(--font-body);
+  font-size:14px;
+  line-height:1.55;
+  text-align:left;
+}
+.jswarn b { color:#e0bd6a; display:block; margin-bottom:8px; font-size:15px; }
+.jswarn p { margin:8px 0 0; }
+.jswarn code {
+  font-family:var(--font-mono);
+  font-size:13px;
+  background:rgba(255,255,255,.08);
+  padding:1px 5px;
+  border-radius:4px;
+}
+
 .sr-only {
   position:absolute; width:1px; height:1px; padding:0; margin:-1px;
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
@@ -476,6 +501,53 @@ footer { text-align:center; margin-top:30px; }
 </head>
 
 <body>
+
+<!--
+  The day grid, the day's habit list and the tab switching are all built by the
+  script at the end of this file. If scripting is off, those three are exactly
+  what goes missing while the static cards still render — which looks like a
+  broken app rather than a disabled one. Say so plainly instead.
+-->
+<noscript>
+  <div class="jswarn">
+    <b>This page needs JavaScript, and it is switched off here.</b>
+    <p>You're seeing the page with its calendar, today's habit list and the
+    Malik / Janel tabs missing — those are built when the page runs.</p>
+    <p>File previews and read-only viewers usually block scripts. To use the
+    tracker, open <code>index.html</code> in a browser tab — save it and
+    double-click it, or visit the published web address.</p>
+  </div>
+</noscript>
+
+<!--
+  Scripting is on but the script never reached its last line: a parse error, a
+  truncated download, or a runtime failure. Show what happened rather than a
+  half-built page. Cleared by window.__ok at the end of the main script.
+-->
+<div id="bootWarn" class="jswarn" hidden>
+  <b>The tracker didn't finish loading.</b>
+  <p id="bootWarnDetail">The file may have been cut short in transit. Re-download
+  <code>index.html</code> and open it again.</p>
+</div>
+<script>
+(function () {
+  window.__bootErr = null;
+  window.addEventListener('error', function (e) {
+    window.__bootErr = e.message + (e.lineno ? ' (line ' + e.lineno + ')' : '');
+  });
+  setTimeout(function () {
+    if (window.__ok) return;
+    var box = document.getElementById('bootWarn');
+    if (!box) return;
+    box.hidden = false;
+    if (window.__bootErr) {
+      document.getElementById('bootWarnDetail').textContent =
+        'The page reported: ' + window.__bootErr;
+    }
+  }, 2000);
+})();
+</script>
+
 <div class="bg" aria-hidden="true">
   <svg preserveAspectRatio="none">
     <defs>
@@ -1465,6 +1537,12 @@ footer { text-align:center; margin-top:30px; }
   // for a host storage bridge, and the day panel must not sit blank until then.
   renderSide();
   renderAll();
+
+  // The grids and habit list are built by now, so the page is usable. Clear the
+  // boot warning before the watchdog fires; storage loading continues below.
+  window.__ok = 1;
+  var bootWarn = $('bootWarn');
+  if (bootWarn) bootWarn.remove();
 
   loadAll().then(function () {
     renderSide();
