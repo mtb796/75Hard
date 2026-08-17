@@ -1,0 +1,12 @@
+{
+  "name": "75-days-soft",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A private 75 Soft challenge ledger for two — standalone HTML, no build step.",
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.49.0"
+  }
+}

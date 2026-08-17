@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>75 Days Soft — Banks &amp; Moore</title>
+<meta name="description" content="A private 75 Soft challenge ledger for two — daily habits, milestone photos, streaks and portable vault codes."/>
+
+<!-- Installable to a phone home screen. The script keeps theme-color in step
+     with the active side so the browser chrome matches the page. -->
+<meta name="theme-color" content="#0b0b0e" id="themeColor"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="75 Soft"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0b0e'/%3E%3Ccircle cx='32' cy='32' r='24' fill='none' stroke='%23e0bd6a' stroke-width='2'/%3E%3Ctext x='32' y='41' font-family='Georgia,serif' font-size='22' font-weight='bold' fill='%23e0bd6a' text-anchor='middle'%3E75%3C/text%3E%3C/svg%3E"/>
+
+<!--
+  Fonts are a progressive enhancement. Under a strict CSP (Claude artifacts,
+  sandboxed iframes) this request is blocked, so every font-family below ends
+  in a real fallback of the same class — serif stays serif, never system sans.
+
+  media="print" keeps this off the critical path. A matching stylesheet blocks
+  both first paint AND the execution of the scripts below it, so a request that
+  hangs — the normal case offline — would otherwise stall app startup for
+  seconds. The script swaps media to "all" once the sheet actually arrives.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link id="fontLink" rel="stylesheet" media="print" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Jost:wght@300;400;500;600&display=swap"/>
+
+<style>
+:root {
+  /* Display faces degrade to a serif, not to the body sans. */
+  --font-display: Cinzel, 'Times New Roman', Times, Georgia, serif;
+  --font-script: 'Cormorant Garamond', Georgia, 'Times New Roman', Times, serif;
+  --font-body: Jost, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --gold-hi:#f6e7ab;
+  --gold:#e0bd6a;
+  --gold-deep:#a9822f;
+  --bone:#eae5d8;
+  --ash:#8b8578;
+  --line:rgba(224,189,106,.22);
+  --line-soft:rgba(224,189,106,.12);
+  --glow-rgb:224,189,106;
+  --on-accent:#131007;
+  --card-a:rgba(255,255,255,.045);
+  --card-b:rgba(255,255,255,.012);
+  --card-shadow:0 20px 40px rgba(0,0,0,.35);
+  --well:rgba(0,0,0,.22);
+  --field:rgba(0,0,0,.35);
+  --navbg:rgba(0,0,0,.3);
+  --tilebg:rgba(255,255,255,.02);
+  --track:rgba(255,255,255,.06);
+  --divider:rgba(255,255,255,.05);
+  --today-ring:rgba(246,231,171,.85);
+  --seal-core:rgba(20,20,26,.6);
+  --credit-c:rgba(139,133,120,.55);
+  color-scheme:dark;
+}
+body.side-jm {
+  --gold-hi:#dce8ad;
+  --gold:#8fa457;
+  --gold-deep:#53642c;
+  --bone:#262c17;
+  --ash:#6e7658;
+  --line:rgba(83,100,44,.42);
+  --line-soft:rgba(83,100,44,.2);
+  --glow-rgb:129,148,74;
+  --on-accent:#1f250d;
+  --card-a:rgba(255,255,255,.62);
+  --card-b:rgba(255,255,255,.28);
+  --card-shadow:0 20px 40px rgba(74,88,42,.16);
+  --well:rgba(255,255,255,.5);
+  --field:rgba(255,255,255,.65);
+  --navbg:rgba(255,255,255,.55);
+  --tilebg:rgba(255,255,255,.4);
+  --track:rgba(83,100,44,.16);
+  --divider:rgba(83,100,44,.16);
+  --today-ring:rgba(63,77,32,.9);
+  --seal-core:rgba(255,255,255,.6);
+  --credit-c:rgba(110,118,88,.75);
+  color-scheme:light;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html {
+  background:#0b0b0e;
+  /* Stop iOS from inflating text when the phone is turned to landscape. */
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+
+body {
+  font-family:var(--font-body);
+  color:var(--bone);
+  min-height:100vh;
+  min-height:100dvh; /* dvh accounts for mobile browser chrome sliding away */
+  letter-spacing:.01em;
+  overflow-x:hidden;
+  transition:color .3s;
+  /* Keep content clear of notches and home indicators. */
+  padding:env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Every control: inherit the type, kill the 300ms double-tap delay, and stop
+   long-press from selecting label text instead of registering the tap. */
+button {
+  font-family:inherit;
+  touch-action:manipulation;
+  -webkit-user-select:none;
+  user-select:none;
+}
+
+/* iOS Safari zooms the whole page when a focused field is under 16px.
+   Every input here is therefore at least 16px. */
+input { font-size:16px; }
+
+.bg {
+  position:fixed; inset:0; z-index:-1;
+  transition:background .4s;
+  background:
+    radial-gradient(120% 60% at 50% -10%,rgba(224,189,106,.1),transparent 60%),
+    radial-gradient(90% 50% at 100% 100%,rgba(224,189,106,.06),transparent 55%),
+    linear-gradient(180deg,#0c0c10 0,#0a0a0d 55%,#0d0c0f 100%);
+}
+body.side-jm .bg {
+  background:
+    radial-gradient(120% 60% at 50% -10%,rgba(143,164,87,.2),transparent 60%),
+    radial-gradient(90% 50% at 100% 100%,rgba(143,164,87,.14),transparent 55%),
+    linear-gradient(180deg,#eef1e3 0,#e8ecda 55%,#e4e9d3 100%);
+}
+.bg svg { position:absolute; inset:0; width:100%; height:100%; }
+.l-jm { display:none; }
+body.side-jm .l-mb { display:none; }
+body.side-jm .l-jm { display:inline; }
+
+main { max-width:560px; margin:0 auto; padding:30px 18px 60px; }
+
+.tabs {
+  display:flex; gap:5px;
+  max-width:300px; margin:0 auto 24px; padding:5px;
+  border:1px solid var(--line-soft); border-radius:999px;
+  background:var(--well);
+}
+.tab {
+  flex:1; padding:12px 0; min-height:44px;
+  border:none; border-radius:999px; background:0 0;
+  color:var(--ash);
+  font-family:var(--font-body); font-size:11.5px;
+  letter-spacing:.24em; text-indent:.24em; text-transform:uppercase;
+  cursor:pointer; transition:color .2s;
+}
+.tab.on {
+  background:linear-gradient(160deg,var(--gold-hi),var(--gold) 55%,var(--gold-deep));
+  color:var(--on-accent); font-weight:600;
+  box-shadow:0 0 14px rgba(var(--glow-rgb),.3);
+}
+.tab:focus-visible { outline:1px solid var(--gold); outline-offset:2px; }
+
+header { text-align:center; margin-bottom:26px; }
+.seal {
+  width:66px; height:66px; margin:0 auto 16px;
+  border-radius:50%; border:1px solid var(--line);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:700; font-size:22px;
+  position:relative;
+  background:radial-gradient(circle at 35% 30%,rgba(var(--glow-rgb),.12),var(--seal-core));
+  box-shadow:0 0 30px rgba(var(--glow-rgb),.14),inset 0 0 18px rgba(0,0,0,.18);
+}
+.seal::after {
+  content:""; position:absolute; inset:4px;
+  border-radius:50%; border:1px solid var(--line-soft);
+}
+.gold-text {
+  background:linear-gradient(180deg,var(--gold-hi) 0,var(--gold) 45%,var(--gold-deep) 85%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.eyebrow {
+  font-size:11px; letter-spacing:.46em; text-indent:.46em;
+  color:var(--gold); text-transform:uppercase; font-weight:500; margin-bottom:12px;
+}
+h1 {
+  font-family:var(--font-display); font-weight:900;
+  font-size:clamp(52px,15vw,80px); line-height:.92; letter-spacing:.02em;
+}
+.soft {
+  font-family:var(--font-script); font-style:italic; font-weight:600;
+  font-size:clamp(40px,11vw,58px); color:var(--bone);
+  display:block; margin-top:2px;
+}
+.subtitle {
+  margin-top:14px; font-size:11px;
+  letter-spacing:.34em; text-indent:.34em; text-transform:uppercase; color:var(--ash);
+}
+.rule-line { display:flex; align-items:center; gap:12px; margin:20px auto 0; max-width:320px; }
+.rule-line::after, .rule-line::before {
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg,transparent,var(--line));
+}
+.rule-line::after { background:linear-gradient(90deg,var(--line),transparent); }
+.rule-line span { color:var(--gold); font-size:10px; }
+
+.card {
+  border:1px solid var(--line-soft);
+  background:linear-gradient(165deg,var(--card-a),var(--card-b) 60%);
+  border-radius:16px; padding:20px; margin-bottom:18px;
+  box-shadow:var(--card-shadow);
+}
+.ledger-top {
+  display:flex; justify-content:space-between; align-items:flex-end;
+  gap:12px; margin-bottom:16px; flex-wrap:wrap;
+}
+.date-field { flex:1 1 150px; }
+#status { flex:1 1 130px; }
+.date-field label {
+  display:block; font-size:10px; letter-spacing:.28em;
+  text-transform:uppercase; color:var(--ash); margin-bottom:6px;
+}
+.date-field input {
+  background:var(--field); border:1px solid var(--line-soft); border-radius:10px;
+  color:var(--bone); font-family:var(--font-body); padding:10px; outline:0;
+  min-height:44px; width:100%; max-width:190px;
+}
+.date-field input:focus-visible { border-color:var(--gold); }
+#status {
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ash); text-align:right; line-height:1.5; transition:color .3s;
+}
+#status.on { color:var(--gold); }
+
+.stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+.stat {
+  text-align:center; padding:10px 4px;
+  border:1px solid var(--line-soft); border-radius:12px; background:var(--well);
+}
+.stat b { display:block; font-family:var(--font-display); font-size:22px; font-weight:700; }
+.stat span { font-size:9px; letter-spacing:.22em; text-transform:uppercase; color:var(--ash); }
+
+.bar {
+  height:5px; border-radius:99px; background:var(--track);
+  overflow:hidden; border:1px solid var(--line-soft);
+}
+.bar i {
+  display:block; height:100%; width:0%; border-radius:99px;
+  background:linear-gradient(90deg,var(--gold-deep),var(--gold),var(--gold-hi));
+  box-shadow:0 0 12px rgba(var(--glow-rgb),.5);
+  transition:width .5s ease;
+}
+.timeline {
+  margin-top:10px; text-align:center;
+  font-size:10px; letter-spacing:.24em; text-transform:uppercase; color:var(--ash);
+  min-height:14px;
+}
+.timeline.done { color:var(--gold); }
+
+.panel-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; }
+.panel-title { font-family:var(--font-display); font-weight:700; font-size:22px; letter-spacing:.06em; }
+.panel-date { font-size:12px; color:var(--ash); letter-spacing:.1em; margin-top:2px; }
+.panel-nav { display:flex; gap:8px; }
+.panel-nav button {
+  width:44px; height:44px; border-radius:12px;
+  border:1px solid var(--line-soft); background:var(--navbg);
+  color:var(--gold); font-size:20px; line-height:1; cursor:pointer;
+}
+.panel-nav button:active { background:rgba(var(--glow-rgb),.15); }
+.panel-nav button:disabled { opacity:.35; cursor:default; }
+.panel-nav button:focus-visible { outline:1px solid var(--gold); outline-offset:2px; }
+.panel-state {
+  font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--ash); margin-bottom:12px;
+}
+.panel-state.done { color:var(--gold); }
+
+.habit {
+  display:flex; align-items:center; gap:14px;
+  width:100%; text-align:left; padding:13px 12px;
+  border:1px solid var(--line-soft); border-radius:13px; background:var(--well);
+  margin-bottom:9px; cursor:pointer;
+  font-family:var(--font-body); color:var(--bone);
+  transition:border-color .2s,background .2s;
+}
+.habit:focus-visible { outline:1px solid var(--gold); outline-offset:2px; }
+.habit .ic { flex:0 0 auto; width:20px; height:20px; color:var(--gold); opacity:.9; }
+.habit .ic svg { width:100%; height:100%; display:block; }
+.habit .tx { flex:1; min-width:0; }
+.habit .tx b { display:block; font-weight:500; font-size:15px; letter-spacing:.04em; }
+.habit .tx span { display:block; font-size:11.5px; color:var(--ash); margin-top:1px; }
+.box {
+  flex:0 0 auto; width:26px; height:26px; border-radius:8px;
+  border:1px solid var(--line);
+  display:flex; align-items:center; justify-content:center;
+  transition:all .2s; color:transparent; font-size:14px;
+}
+.habit.checked { border-color:var(--line); background:rgba(var(--glow-rgb),.1); }
+.habit.checked .box {
+  background:linear-gradient(160deg,var(--gold-hi),var(--gold) 55%,var(--gold-deep));
+  border-color:var(--gold); color:var(--on-accent);
+  box-shadow:0 0 14px rgba(var(--glow-rgb),.35);
+}
+.habit.locked, .habit:disabled { opacity:.45; cursor:default; }
+.habit.locked .box { border-style:dashed; }
+
+.phase-label {
+  display:flex; align-items:center; gap:12px; margin:24px 2px 12px;
+  font-size:10.5px; letter-spacing:.3em; text-transform:uppercase; color:var(--ash);
+}
+.phase-label::after {
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg,var(--line-soft),transparent);
+}
+.phase-label b { color:var(--gold); font-weight:500; letter-spacing:.3em; }
+
+.grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.tile {
+  position:relative; aspect-ratio:1; border-radius:12px;
+  border:1px solid var(--line-soft); background:var(--tilebg);
+  color:var(--ash); font-family:var(--font-display); font-size:15px; font-weight:500;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:transform .15s,border-color .2s,background .2s,color .2s;
+  overflow:hidden;
+}
+.tile::after {
+  content:""; position:absolute; left:0; bottom:0;
+  height:3px; width:var(--p,0%);
+  background:linear-gradient(90deg,var(--gold-deep),var(--gold));
+  transition:width .3s;
+}
+.tile.photo::before {
+  content:""; position:absolute; top:6px; right:6px;
+  width:4px; height:4px; border-radius:50%;
+  background:var(--gold); opacity:.7;
+}
+.tile.partial { border-color:var(--line); color:var(--bone); }
+.tile.done {
+  background:linear-gradient(160deg,var(--gold-hi),var(--gold) 55%,var(--gold-deep));
+  border-color:var(--gold); color:var(--on-accent); font-weight:700;
+  box-shadow:0 0 16px rgba(var(--glow-rgb),.3);
+}
+.tile.done::after { display:none; }
+.tile.today { outline:1px solid var(--today-ring); outline-offset:2px; }
+.tile.sel { transform:scale(1.07); border-color:var(--gold); z-index:1; }
+.tile.future { opacity:.5; }
+.tile.done.future { opacity:1; }
+.tile:focus-visible { outline:1px solid var(--gold); outline-offset:2px; }
+
+.rules h2 { font-family:var(--font-display); font-weight:700; font-size:20px; letter-spacing:.1em; margin-bottom:14px; }
+.rules ul { list-style:none; }
+.rules li {
+  display:flex; gap:12px; align-items:flex-start;
+  font-size:14px; font-weight:300; color:var(--bone);
+  padding:9px 0; border-bottom:1px solid var(--divider);
+}
+.rules li:last-child { border-bottom:none; }
+.rules li::before { content:"◆"; color:var(--gold); font-size:8px; margin-top:6px; flex:0 0 auto; }
+
+.vault-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.vault-head h2 { font-family:var(--font-display); font-weight:700; font-size:20px; letter-spacing:.1em; }
+.vault-toggle {
+  background:0 0; border:1px solid var(--line-soft); border-radius:9px;
+  color:var(--gold); font-family:var(--font-body); font-size:11px;
+  letter-spacing:.18em; text-transform:uppercase;
+  padding:10px 16px; min-height:44px; cursor:pointer;
+}
+.vault-note { font-size:12.5px; font-weight:300; color:var(--ash); line-height:1.55; }
+.vault-label {
+  display:block; font-size:10px; letter-spacing:.26em;
+  text-transform:uppercase; color:var(--ash); margin:14px 0 6px;
+}
+.vault-row { display:flex; gap:8px; }
+.vault-row input {
+  flex:1; min-width:0;
+  background:var(--field); border:1px solid var(--line-soft); border-radius:10px;
+  color:var(--bone); font-family:var(--font-mono); padding:11px 10px; outline:0; min-height:44px;
+}
+.vault-row input:focus-visible { border-color:var(--gold); }
+.vault-row button {
+  flex:0 0 auto;
+  background:rgba(var(--glow-rgb),.1); border:1px solid var(--line); border-radius:10px;
+  color:var(--gold); font-family:var(--font-body); font-size:13px;
+  letter-spacing:.1em; padding:0 18px; min-height:44px; cursor:pointer;
+}
+.vault-row button:focus-visible, .vault-toggle:focus-visible, .reset:focus-visible {
+  outline:1px solid var(--gold); outline-offset:2px;
+}
+.vault-msg {
+  font-size:12px; color:var(--ash); margin-top:10px;
+  min-height:15px; letter-spacing:.06em; line-height:1.5;
+}
+.vault-msg.on { color:var(--gold); }
+
+footer { text-align:center; margin-top:30px; }
+.reset {
+  background:0 0; border:1px solid var(--line-soft); border-radius:10px;
+  color:var(--ash); font-family:var(--font-body); font-size:11px;
+  letter-spacing:.2em; text-transform:uppercase; padding:12px 20px; min-height:44px;
+  cursor:pointer; transition:all .2s;
+}
+.reset.arm { border-color:#8a3c3c; color:#c05555; }
+.credit {
+  margin-top:16px; font-size:10px; letter-spacing:.24em;
+  text-transform:uppercase; color:var(--credit-c);
+}
+
+.sr-only {
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+
+/* How-it-works legend */
+.howto ul { list-style:none; }
+.howto li {
+  display:flex; gap:12px; align-items:flex-start;
+  font-size:13.5px; font-weight:300; color:var(--bone);
+  padding:9px 0; border-bottom:1px solid var(--divider);
+}
+.howto li:last-child { border-bottom:none; }
+.howto li b { font-weight:500; color:var(--gold); }
+.howto li.note::before {
+  content:"◆"; color:var(--gold); font-size:8px; margin-top:6px; flex:0 0 auto;
+}
+.howto h2 {
+  font-family:var(--font-display); font-weight:700;
+  font-size:20px; letter-spacing:.1em; margin-bottom:14px;
+}
+.key {
+  flex:0 0 auto; width:26px; height:26px; margin-top:1px;
+  border-radius:8px; border:1px solid var(--line-soft);
+  background:var(--tilebg); position:relative; overflow:hidden;
+}
+.key.k-done {
+  background:linear-gradient(160deg,var(--gold-hi),var(--gold) 55%,var(--gold-deep));
+  border-color:var(--gold);
+}
+.key.k-partial::after {
+  content:""; position:absolute; left:0; bottom:0; height:3px; width:55%;
+  background:linear-gradient(90deg,var(--gold-deep),var(--gold));
+}
+.key.k-photo::before {
+  content:""; position:absolute; top:5px; right:5px;
+  width:4px; height:4px; border-radius:50%; background:var(--gold);
+}
+.key.k-today { outline:1px solid var(--today-ring); outline-offset:-3px; }
+
+/* Phones. Tighter gutters so the 5-wide day grid keeps comfortable tiles. */
+@media (max-width:400px) {
+  main { padding:22px 12px 48px; }
+  .card { padding:16px; border-radius:14px; }
+  .grid { gap:6px; }
+  .tile { border-radius:10px; font-size:14px; }
+  .habit { gap:11px; padding:12px 10px; }
+  .habit .tx b { font-size:14.5px; }
+  .habit .tx span { font-size:11px; }
+  .eyebrow { letter-spacing:.3em; text-indent:.3em; }
+  .subtitle { letter-spacing:.22em; text-indent:.22em; }
+  .stat b { font-size:20px; }
+  .stat span { font-size:8.5px; letter-spacing:.14em; }
+  .vault-row { flex-wrap:wrap; }
+  .vault-row input { flex:1 1 100%; }
+  .vault-row button { flex:1 1 100%; }
+}
+
+/* Landscape phones and small tablets: let the day grid breathe. */
+@media (min-width:620px) {
+  .grid { grid-template-columns:repeat(5,1fr); gap:10px; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  * { transition:none!important; animation:none!important; }
+}
+</style>
+</head>
+
+<body>
+<div class="bg" aria-hidden="true">
+  <svg preserveAspectRatio="none">
+    <defs>
+      <filter id="veins" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.013" numOctaves="5" seed="11"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.88  0 0 0 0 0.78  0 0 0 0 0.52  0 0 0 24 -12"/>
+      </filter>
+      <filter id="clouds" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.0022 0.0045" numOctaves="4" seed="4"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.92  0 0 0 0 0.90  0 0 0 0 0.84  0 0 0 10 -5"/>
+      </filter>
+      <filter id="veinsJm" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.013" numOctaves="5" seed="17"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.31  0 0 0 0 0.37  0 0 0 0 0.16  0 0 0 24 -12"/>
+      </filter>
+      <filter id="cloudsJm" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.0022 0.0045" numOctaves="4" seed="9"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.52  0 0 0 0 0.58  0 0 0 0 0.40  0 0 0 10 -5"/>
+      </filter>
+      <filter id="grain">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="2"/>
+      </filter>
+    </defs>
+    <rect class="l-mb" width="100%" height="100%" filter="url(#clouds)" opacity="0.05"/>
+    <rect class="l-mb" width="100%" height="100%" filter="url(#veins)" opacity="0.07"/>
+    <rect class="l-jm" width="100%" height="100%" filter="url(#cloudsJm)" opacity="0.10"/>
+    <rect class="l-jm" width="100%" height="100%" filter="url(#veinsJm)" opacity="0.08"/>
+    <rect width="100%" height="100%" filter="url(#grain)" opacity="0.03"/>
+  </svg>
+</div>
+
+<main>
+  <div class="tabs" role="tablist" aria-label="Choose a side">
+    <button id="tabMb" class="tab on" role="tab" aria-selected="true" aria-controls="ledger" tabindex="0">Malik</button>
+    <button id="tabJm" class="tab" role="tab" aria-selected="false" aria-controls="ledger" tabindex="-1">Janel</button>
+  </div>
+
+  <header>
+    <div class="seal"><span id="sealTxt" class="gold-text">MB</span></div>
+    <div class="eyebrow" id="eyebrow">Malik Banks</div>
+    <h1><span class="gold-text">75 DAYS</span><span class="soft">Soft</span></h1>
+    <div class="subtitle">Private Challenge Ledger</div>
+    <div class="rule-line"><span>◆</span></div>
+  </header>
+
+  <div id="ledger" role="tabpanel" aria-labelledby="tabMb" tabindex="0">
+    <section class="card">
+      <div class="ledger-top">
+        <div class="date-field">
+          <label for="startDate">Start date</label>
+          <input type="date" id="startDate" min="2000-01-01" max="2179-12-31"/>
+        </div>
+        <div id="status" role="status" aria-live="polite"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b class="gold-text" id="sDay">—</b><span>Day of 75</span></div>
+        <div class="stat"><b class="gold-text" id="sPerfect">0</b><span>Perfect days</span></div>
+        <div class="stat"><b class="gold-text" id="sStreak">0</b><span>Streak</span></div>
+      </div>
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <section class="card" id="dayPanel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title gold-text" id="pTitle">DAY 1</div>
+          <div class="panel-date" id="pDate"></div>
+        </div>
+        <div class="panel-nav">
+          <button id="prevDay" aria-label="Previous day">‹</button>
+          <button id="nextDay" aria-label="Next day">›</button>
+        </div>
+      </div>
+      <div class="panel-state" id="pState"></div>
+      <div id="habitList"></div>
+    </section>
+
+    <div id="phases"></div>
+  </div>
+
+  <section class="card">
+    <div class="vault-head">
+      <h2 class="gold-text">The Vault</h2>
+      <button id="vaultToggle" class="vault-toggle" aria-expanded="false" aria-controls="vaultBody">Open</button>
+    </div>
+    <p class="vault-note">
+      Progress saves to this device automatically, and to the host app when one is
+      available. Vault codes are the portable copy — MB75 for Malik, JM75 for Janel.
+      Copy yours to move a ledger to another device, or paste either code here to restore it.
+    </p>
+    <div id="vaultBody" hidden>
+      <label class="vault-label" for="vaultCode" id="vaultCodeLabel">Current vault code — Malik</label>
+      <div class="vault-row">
+        <input id="vaultCode" readonly spellcheck="false"/>
+        <button id="copyCode">Copy</button>
+      </div>
+      <label class="vault-label" for="restoreInput">Restore from code</label>
+      <div class="vault-row">
+        <input id="restoreInput" placeholder="MB75-… or JM75-…" spellcheck="false" autocapitalize="off" autocomplete="off"/>
+        <button id="restoreBtn">Restore</button>
+      </div>
+      <div class="vault-msg" id="vaultMsg" role="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="card rules">
+    <h2 class="gold-text">The Rules</h2>
+    <ul>
+      <li>One workout a day, 20–30 minutes.</li>
+      <li>Balanced meals with protein and vegetables. No fast food, no sugar.</li>
+      <li>Drink 1.5–2 liters of water daily.</li>
+      <li>Read 10 pages of any book.</li>
+      <li>Sleep at least 7 hours each night.</li>
+      <li><span>Milestone photos on days <span id="milestoneList">1, 10, 20, 30, 40, 50, 60, 75</span>.</span></li>
+    </ul>
+  </section>
+
+  <section class="card howto">
+    <h2 class="gold-text">How It Works</h2>
+    <ul>
+      <li class="note"><span><b>Tap a day</b> to open it, then tap a habit to check it off. Use ‹ and › to step a day at a time.</span></li>
+      <li><span class="key k-partial" aria-hidden="true"></span><span><b>Part-done days</b> carry a bar along the bottom showing how far you got.</span></li>
+      <li><span class="key k-done" aria-hidden="true"></span><span><b>A filled tile</b> is a perfect day — all five habits, or all six on a photo day.</span></li>
+      <li><span class="key k-today" aria-hidden="true"></span><span><b>Today</b> is ringed. Days after today are dimmed until you reach them.</span></li>
+      <li><span class="key k-photo" aria-hidden="true"></span><span><b>A dot in the corner</b> marks a milestone photo day. The photo box stays locked on every other day and doesn't count against you.</span></li>
+      <li class="note"><span><b>Streak</b> counts perfect days back from today. Today stays open until you complete it, so it only breaks once a finished day is missed.</span></li>
+      <li class="note"><span><b>Malik and Janel are separate ledgers</b> — own start date, own progress, own colours. Switch with the tabs at the top.</span></li>
+      <li class="note"><span><b>Progress saves by itself</b> on this device as you tap. To carry a ledger to another phone, copy its vault code and paste it there.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <button class="reset" id="resetBtn">Reset Malik's progress</button>
+    <div class="credit">Adapted from the 75 Soft Challenge · Banks &amp; Moore</div>
+  </footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------------ *
+   * Fonts: promote the deferred stylesheet once it has actually loaded.
+   * If the request is blocked or offline this never fires, and the serif
+   * and sans fallbacks in the CSS carry the design on their own.
+   * ------------------------------------------------------------------ */
+
+  (function activateFonts() {
+    var link = document.getElementById('fontLink');
+    if (!link) return;
+    var promote = function () { link.media = 'all'; };
+    if (link.sheet) promote();
+    else link.addEventListener('load', promote);
+  })();
+
+  /* ------------------------------------------------------------------ *
+   * Constants
+   * ------------------------------------------------------------------ */
+
+  var TOTAL_DAYS = 75;
+  var MILESTONES = [1, 10, 20, 30, 40, 50, 60, 75];
+  var PHASES = [['I', 1, 25], ['II', 26, 50], ['III', 51, 75]];
+
+  var SIDES = {
+    mb: { name: 'Malik', full: 'Malik Banks', seal: 'MB', prefix: 'MB75-' },
+    jm: { name: 'Janel', full: 'Janel Moore', seal: 'JM', prefix: 'JM75-' }
+  };
+
+  var ICONS = {
+    workout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>',
+    diet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 13h16a8 8 0 0 1-16 0zM12 13V8m0 0c0-2 1.5-3.5 3.5-3.5C15.5 6.5 14 8 12 8z"/></svg>',
+    book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6c-1.8-1.6-4.4-2-7-2v14c2.6 0 5.2.4 7 2 1.8-1.6 4.4-2 7-2V4c-2.6 0-5.2.4-7 2zm0 0v14"/></svg>',
+    water: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.6 6 11a6 6 0 0 1-12 0c0-4.4 6-11 6-11z"/></svg>',
+    sleep: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.4A8.6 8.6 0 0 1 9.6 3.5a8.6 8.6 0 1 0 10.9 10.9z"/></svg>',
+    photo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8.5 7 10 4.5h4L15.5 7"/><circle cx="12" cy="13" r="3.5"/></svg>'
+  };
+
+  // "Sleep at least 7 hours" is one of the six posted rules, so it is a
+  // tracked habit like the rest. The rules card and this list must agree.
+  var HABITS = [
+    { k: 'workout', label: 'Workout',        sub: '20–30 minutes of movement' },
+    { k: 'diet',    label: 'Diet',           sub: 'Protein & veggies · no fast food or sugar' },
+    { k: 'book',    label: 'Read',           sub: '10 pages of any book' },
+    { k: 'water',   label: 'Water',          sub: '1.5–2 liters' },
+    { k: 'sleep',   label: 'Sleep',          sub: 'At least 7 hours' },
+    { k: 'photo',   label: 'Progress photo', sub: 'Milestone days only', milestone: true }
+  ];
+
+  /* ------------------------------------------------------------------ *
+   * Vault-code wire format
+   *
+   * Layout: [version][dateHi][dateLo][packed habit bits…][checksum…]
+   * The key order and epoch below ARE the wire format — never reorder or
+   * retune an existing version; add a new one instead.
+   *
+   *   v1  5 habits/day, epoch 2020-01-01, no checksum   → 50 bytes
+   *   v2  6 habits/day, epoch 2000-01-01, Fletcher-16   → 62 bytes
+   * ------------------------------------------------------------------ */
+
+  var CODECS = {
+    1: { keys: ['workout', 'diet', 'book', 'water', 'photo'],
+         epochY: 2020, size: 50, checksum: false },
+    2: { keys: ['workout', 'diet', 'book', 'water', 'sleep', 'photo'],
+         epochY: 2000, size: 62, checksum: true }
+  };
+  var CODEC_VERSION = 2;
+  var NO_DATE = 0xffff;
+
+  /* ------------------------------------------------------------------ *
+   * Storage keys
+   * ------------------------------------------------------------------ */
+
+  var STORE_KEY = 'banks75soft:duo';
+  var LEGACY_KEYS = ['banks75soft:ledger', 'banks-75soft-v1'];
+  var HOST_WAIT_MS = 4000;
+  var MSG_LOCAL_ONLY = 'Saved on this device · reload to sync';
+
+  /* ------------------------------------------------------------------ *
+   * State
+   * ------------------------------------------------------------------ */
+
+  var state = {
+    mb: { startDate: null, days: {} },
+    jm: { startDate: null, days: {} }
+  };
+  var activeSide = 'mb';
+  var ledger = state.mb;
+  var selectedDay = 1;
+
+  var tiles = [];            // 1-indexed; tiles[0] is intentionally empty
+  var saveTimer = null;
+
+  // Persistence capability flags, resolved once at startup.
+  var localOk = false;       // localStorage is readable and writable
+  var hostConfirmed = false; // window.storage answered a read; safe to write
+  var vaultOnly = false;     // no automatic layer at all
+
+  /* ------------------------------------------------------------------ *
+   * Small helpers
+   * ------------------------------------------------------------------ */
+
+  function $(id) { return document.getElementById(id); }
+
+  var statusEl = $('status');
+
+  function isMilestone(day) { return MILESTONES.indexOf(day) !== -1; }
+
+  function parseDate(iso) {
+    var p = iso.split('-').map(Number);
+    return new Date(p[0], p[1] - 1, p[2]);
+  }
+
+  function toIso(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  function daysBetween(from, to) {
+    return Math.round((to.getTime() - from.getTime()) / 86400000);
+  }
+
+  function clampDay(n) { return Math.min(Math.max(n, 1), TOTAL_DAYS); }
+
+  /* ------------------------------------------------------------------ *
+   * Day maths
+   *
+   * dayOffset() is deliberately UNCLAMPED so the UI can tell the three
+   * states apart: not started yet (< 1), running (1…75), finished (> 75).
+   * ------------------------------------------------------------------ */
+
+  function dayOffset() {
+    if (!ledger.startDate) return null;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return daysBetween(parseDate(ledger.startDate), today) + 1;
+  }
+
+  // The day number to highlight as "today", or null when outside the run.
+  function todayDay() {
+    var raw = dayOffset();
+    if (raw === null || raw < 1 || raw > TOTAL_DAYS) return null;
+    return raw;
+  }
+
+  function dayData(day) { return ledger.days[day] || {}; }
+
+  function requiredFor(day) {
+    return isMilestone(day) ? HABITS.length : HABITS.length - 1;
+  }
+
+  function completedIn(day) {
+    var d = dayData(day);
+    var n = 0;
+    for (var i = 0; i < HABITS.length; i++) {
+      var h = HABITS[i];
+      if (h.milestone && !isMilestone(day)) continue;
+      if (d[h.k]) n++;
+    }
+    return n;
+  }
+
+  function isPerfect(day) { return completedIn(day) >= requiredFor(day); }
+
+  /* ------------------------------------------------------------------ *
+   * Persistence
+   * ------------------------------------------------------------------ */
+
+  function setStatus(text, highlight) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('on', !!highlight);
+  }
+
+  function clearStatusLater(match) {
+    setTimeout(function () {
+      if (statusEl.textContent === match) setStatus('');
+    }, 2200);
+  }
+
+  function probeLocalStorage() {
+    try {
+      var probe = '__75soft_probe__';
+      window.localStorage.setItem(probe, '1');
+      window.localStorage.removeItem(probe);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function readLocal() {
+    try {
+      var v = window.localStorage.getItem(STORE_KEY);
+      if (v) return v;
+      for (var i = 0; i < LEGACY_KEYS.length; i++) {
+        v = window.localStorage.getItem(LEGACY_KEYS[i]);
+        if (v) return v;
+      }
+    } catch (e) { /* storage disabled */ }
+    return null;
+  }
+
+  function writeLocal(json) {
+    try {
+      window.localStorage.setItem(STORE_KEY, json);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function hostReady() {
+    return !!(window.storage && typeof window.storage.get === 'function');
+  }
+
+  function waitForHost(ms) {
+    return new Promise(function (resolve) {
+      var started = Date.now();
+      (function poll() {
+        if (hostReady()) return resolve(true);
+        if (Date.now() - started >= ms) return resolve(false);
+        setTimeout(poll, 150);
+      })();
+    });
+  }
+
+  async function hostGet(key) {
+    try {
+      var r = await window.storage.get(key, false);
+      return r && r.value ? r.value : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function serialize() {
+    return JSON.stringify({
+      v: 2,
+      active: activeSide,
+      mb: state.mb,
+      jm: state.jm,
+      updatedAt: Date.now()
+    });
+  }
+
+  // Accepts both the current duo record and the original single-ledger one.
+  function parseRecord(json) {
+    if (!json) return null;
+    try {
+      var o = JSON.parse(json);
+      if (!o || typeof o !== 'object') return null;
+      if (o.v === 2 || o.mb || o.jm) {
+        return {
+          mb: o.mb || { startDate: null, days: {} },
+          jm: o.jm || { startDate: null, days: {} },
+          active: SIDES[o.active] ? o.active : 'mb',
+          updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : 0
+        };
+      }
+      if ('days' in o || 'startDate' in o) {
+        return {
+          mb: { startDate: o.startDate || null, days: o.days || {} },
+          jm: { startDate: null, days: {} },
+          active: 'mb',
+          updatedAt: 0
+        };
+      }
+    } catch (e) { /* corrupt record; fall through */ }
+    return null;
+  }
+
+  function recordWeight(rec) {
+    if (!rec) return -1;
+    var n = 0;
+    ['mb', 'jm'].forEach(function (s) {
+      if (rec[s].startDate) n++;
+      n += Object.keys(rec[s].days || {}).length;
+    });
+    return n;
+  }
+
+  // Prefer the more recently written record; fall back to the fuller one
+  // when neither carries a timestamp (records written by the old build).
+  function pickRecord(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
+    return recordWeight(a) >= recordWeight(b) ? a : b;
+  }
+
+  function applyRecord(rec) {
+    if (!rec) return;
+    state.mb = rec.mb;
+    state.jm = rec.jm;
+    activeSide = rec.active;
+    ledger = state[activeSide];
+  }
+
+  async function loadAll() {
+    localOk = probeLocalStorage();
+
+    // Wait for a host-provided storage bridge, if this build is embedded in one.
+    hostConfirmed = await waitForHost(HOST_WAIT_MS);
+
+    var hostRec = null;
+    if (hostConfirmed) {
+      var json = await hostGet(STORE_KEY);
+      if (!json) {
+        for (var i = 0; i < LEGACY_KEYS.length && !json; i++) {
+          json = await hostGet(LEGACY_KEYS[i]);
+        }
+      }
+      hostRec = parseRecord(json);
+    }
+
+    var localRec = parseRecord(readLocal());
+    applyRecord(pickRecord(hostRec, localRec));
+
+    vaultOnly = !localOk && !hostConfirmed;
+    if (vaultOnly) {
+      enterVaultMode('No storage is available in this viewer.');
+    } else if (!hostConfirmed && hostReady()) {
+      setStatus(MSG_LOCAL_ONLY);
+    } else if (hostRec && localRec && hostRec !== localRec) {
+      // Converge the two layers on whichever record won.
+      scheduleSave();
+    }
+  }
+
+  function enterVaultMode(reason) {
+    vaultOnly = true;
+    setStatus('Autosave off · see The Vault ↓');
+    var body = $('vaultBody');
+    if (body && body.hidden) {
+      body.hidden = false;
+      $('vaultToggle').textContent = 'Close';
+      $('vaultToggle').setAttribute('aria-expanded', 'true');
+    }
+    renderVaultCode();
+    setVaultMsg(reason + ' Copy your vault code when you finish a session, then paste it back next time.', true);
+  }
+
+  async function save(attempt) {
+    if (vaultOnly) {
+      renderVaultCode();
+      setStatus('Vault code updated — copy to keep', true);
+      setTimeout(function () {
+        if (/^Vault code/.test(statusEl.textContent)) setStatus('Autosave off · using vault');
+      }, 2600);
+      return;
+    }
+
+    var json = serialize();
+    var wroteLocal = localOk && writeLocal(json);
+    var wroteHost = false;
+
+    if (hostConfirmed) {
+      try {
+        wroteHost = !!(await window.storage.set(STORE_KEY, json, false));
+      } catch (e) {
+        wroteHost = false;
+      }
+      if (!wroteHost && !wroteLocal) {
+        if (attempt < 2) {
+          setStatus('Retrying…');
+          setTimeout(function () { save(attempt + 1); }, 700 * (attempt + 1));
+          return;
+        }
+        enterVaultMode('Autosave is blocked in this viewer.');
+        return;
+      }
+    }
+
+    if (!wroteLocal && !wroteHost) {
+      enterVaultMode('Autosave is blocked in this viewer.');
+      return;
+    }
+
+    // A bridge that appeared after the load window stays read-only for this
+    // session: writing to it would replace real saved progress with the empty
+    // ledger we rendered while waiting. Say so instead of silently diverging.
+    var msg = wroteHost ? '✓ Saved'
+      : (!hostConfirmed && hostReady() ? MSG_LOCAL_ONLY : '✓ Saved on this device');
+    setStatus(msg, true);
+    clearStatusLater(msg);
+  }
+
+  function scheduleSave() {
+    if (!vaultOnly) setStatus('Saving…');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () { save(0); }, 450);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Vault codec
+   * ------------------------------------------------------------------ */
+
+  function fletcher16(bytes) {
+    var a = 0, b = 0;
+    for (var i = 0; i < bytes.length; i++) {
+      a = (a + bytes[i]) % 255;
+      b = (b + a) % 255;
+    }
+    return [b, a];
+  }
+
+  function b64urlEncode(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function b64urlDecode(text) {
+    var s = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+    var out = [];
+    for (var i = 0; i < s.length; i++) out.push(s.charCodeAt(i));
+    return out;
+  }
+
+  function encodeVault(sideKey) {
+    var spec = CODECS[CODEC_VERSION];
+    var side = state[sideKey];
+    var bytes = [CODEC_VERSION];
+
+    // Dates outside the encodable window degrade to "no start date" rather
+    // than wrapping into a garbage offset.
+    var offset = NO_DATE;
+    if (side.startDate) {
+      var n = daysBetween(new Date(spec.epochY, 0, 1), parseDate(side.startDate));
+      if (n >= 0 && n < NO_DATE) offset = n;
+    }
+    bytes.push((offset >> 8) & 255, offset & 255);
+
+    var bits = [];
+    for (var day = 1; day <= TOTAL_DAYS; day++) {
+      var d = side.days[day] || {};
+      for (var k = 0; k < spec.keys.length; k++) bits.push(d[spec.keys[k]] ? 1 : 0);
+    }
+    for (var i = 0; i < bits.length; i += 8) {
+      var byte = 0;
+      for (var j = 0; j < 8; j++) byte = (byte << 1) | (bits[i + j] || 0);
+      bytes.push(byte);
+    }
+
+    if (spec.checksum) bytes = bytes.concat(fletcher16(bytes));
+    return SIDES[sideKey].prefix + b64urlEncode(bytes);
+  }
+
+  function decodeVault(text) {
+    var raw = String(text).trim().replace(/\s+/g, '');
+    if (!raw) throw new Error('empty');
+
+    var target = /^JM75/i.test(raw) ? 'jm' : 'mb';
+    var payload = raw.replace(/^(MB75|JM75)-?/i, '');
+    if (!/^[A-Za-z0-9\-_]+$/.test(payload)) throw new Error('charset');
+
+    var bytes = b64urlDecode(payload);
+    var spec = CODECS[bytes[0]];
+    if (!spec) throw new Error('version');
+    if (bytes.length !== spec.size) throw new Error('length');
+
+    if (spec.checksum) {
+      var body = bytes.slice(0, bytes.length - 2);
+      var want = fletcher16(body);
+      if (bytes[bytes.length - 2] !== want[0] || bytes[bytes.length - 1] !== want[1]) {
+        throw new Error('checksum');
+      }
+      bytes = body;
+    }
+
+    var startDate = null;
+    var offset = (bytes[1] << 8) | bytes[2];
+    if (offset !== NO_DATE) {
+      var d = new Date(spec.epochY, 0, 1);
+      d.setDate(d.getDate() + offset);
+      startDate = toIso(d);
+    }
+
+    var bits = [];
+    for (var i = 3; i < bytes.length; i++) {
+      for (var b = 7; b >= 0; b--) bits.push((bytes[i] >> b) & 1);
+    }
+
+    var days = {};
+    var cursor = 0;
+    for (var day = 1; day <= TOTAL_DAYS; day++) {
+      var entry = {};
+      var any = false;
+      for (var k = 0; k < spec.keys.length; k++) {
+        if (bits[cursor++]) { entry[spec.keys[k]] = true; any = true; }
+      }
+      if (any) days[day] = entry;
+    }
+
+    return { target: target, data: { startDate: startDate, days: days } };
+  }
+
+  function renderVaultCode() {
+    var input = $('vaultCode');
+    if (input) input.value = encodeVault(activeSide);
+    var label = $('vaultCodeLabel');
+    if (label) label.textContent = 'Current vault code — ' + SIDES[activeSide].name;
+  }
+
+  function setVaultMsg(text, highlight) {
+    var el = $('vaultMsg');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('on', !!highlight);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Rendering
+   * ------------------------------------------------------------------ */
+
+  function renderTile(day) {
+    var tile = tiles[day];
+    if (!tile) return;
+    var done = completedIn(day);
+    var need = requiredFor(day);
+    var raw = dayOffset();
+
+    tile.classList.toggle('done', done >= need);
+    tile.classList.toggle('partial', done > 0 && done < need);
+    tile.style.setProperty('--p', (done / need) * 100 + '%');
+    tile.classList.toggle('today', todayDay() === day);
+    tile.classList.toggle('future', raw !== null && day > raw);
+    tile.classList.toggle('sel', selectedDay === day);
+  }
+
+  function renderStats() {
+    var raw = dayOffset();
+    var perfect = 0;
+    for (var d = 1; d <= TOTAL_DAYS; d++) if (isPerfect(d)) perfect++;
+
+    var dayLabel = '—';
+    var line = '';
+    var finished = false;
+
+    if (raw === null) {
+      line = 'Set a start date to begin';
+    } else if (raw < 1) {
+      var away = 1 - raw;
+      line = away === 1 ? 'Starts tomorrow' : 'Starts in ' + away + ' days';
+    } else if (raw > TOTAL_DAYS) {
+      dayLabel = '✓';
+      finished = true;
+      line = 'Finished · ' + perfect + ' of ' + TOTAL_DAYS + ' days perfect';
+    } else {
+      dayLabel = String(raw);
+      line = 'Day ' + raw + ' of ' + TOTAL_DAYS;
+    }
+
+    $('sDay').textContent = dayLabel;
+    $('sPerfect').textContent = perfect;
+
+    // Streak counts back from today (or yesterday, if today is still open).
+    var streak = 0;
+    var anchor = todayDay();
+    if (raw !== null && raw > TOTAL_DAYS) anchor = TOTAL_DAYS;
+    if (anchor !== null) {
+      for (var e = isPerfect(anchor) ? anchor : anchor - 1; e >= 1 && isPerfect(e); e--) streak++;
+    }
+    $('sStreak').textContent = streak;
+
+    $('barFill').style.width = (perfect / TOTAL_DAYS) * 100 + '%';
+
+    var timeline = $('timeline');
+    timeline.textContent = line;
+    timeline.classList.toggle('done', finished);
+  }
+
+  function renderPanel() {
+    $('pTitle').textContent = 'DAY ' + selectedDay;
+    $('pDate').textContent = (function () {
+      if (!ledger.startDate) return '';
+      var d = parseDate(ledger.startDate);
+      d.setDate(d.getDate() + selectedDay - 1);
+      return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    })();
+
+    var done = completedIn(selectedDay);
+    var need = requiredFor(selectedDay);
+    var stateEl = $('pState');
+    stateEl.textContent = done >= need ? '◆ Day complete' : done + ' of ' + need + ' complete';
+    stateEl.classList.toggle('done', done >= need);
+
+    $('prevDay').disabled = selectedDay <= 1;
+    $('nextDay').disabled = selectedDay >= TOTAL_DAYS;
+
+    var list = $('habitList');
+    list.innerHTML = '';
+
+    HABITS.forEach(function (habit) {
+      var locked = !!habit.milestone && !isMilestone(selectedDay);
+      var checked = !!dayData(selectedDay)[habit.k] && !locked;
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'habit' + (checked ? ' checked' : '') + (locked ? ' locked' : '');
+      btn.setAttribute('aria-pressed', checked ? 'true' : 'false');
+      btn.innerHTML =
+        '<span class="ic">' + ICONS[habit.k] + '</span>' +
+        '<span class="tx"><b>' + habit.label + '</b><span>' + habit.sub + '</span></span>' +
+        '<span class="box" aria-hidden="true">✦</span>';
+
+      if (locked) {
+        // A real `disabled` button drops out of the tab order and is announced
+        // as unavailable, which `aria-disabled` alone does not do.
+        btn.disabled = true;
+        btn.title = 'Photo days: ' + MILESTONES.join(', ');
+      } else {
+        btn.addEventListener('click', function () {
+          if (!ledger.days[selectedDay]) ledger.days[selectedDay] = {};
+          ledger.days[selectedDay][habit.k] = !ledger.days[selectedDay][habit.k];
+          renderPanel();
+          renderTile(selectedDay);
+          renderStats();
+          renderVaultCode();
+          scheduleSave();
+        });
+      }
+      list.appendChild(btn);
+    });
+  }
+
+  function selectDay(day, scroll) {
+    var previous = selectedDay;
+    selectedDay = clampDay(day);
+    renderTile(previous);
+    renderTile(selectedDay);
+    renderPanel();
+    if (scroll) $('dayPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function renderAll() {
+    for (var d = 1; d <= TOTAL_DAYS; d++) renderTile(d);
+    renderStats();
+    renderPanel();
+    renderVaultCode();
+    $('startDate').value = ledger.startDate || '';
+  }
+
+  function resetLabel() { return 'Reset ' + SIDES[activeSide].name + '’s progress'; }
+
+  function renderSide() {
+    document.body.classList.toggle('side-jm', activeSide === 'jm');
+    $('sealTxt').textContent = SIDES[activeSide].seal;
+    $('eyebrow').textContent = SIDES[activeSide].full;
+
+    // Match the phone's browser/status bar to the side's palette, and paint the
+    // root element to match too: the backdrop is position:fixed, so an iOS
+    // overscroll bounce exposes <html> and would flash black on the light side.
+    var ground = activeSide === 'jm' ? '#eef1e3' : '#0b0b0e';
+    var themeMeta = $('themeColor');
+    if (themeMeta) themeMeta.setAttribute('content', ground);
+    document.documentElement.style.background = ground;
+
+    var tabs = { mb: $('tabMb'), jm: $('tabJm') };
+    Object.keys(tabs).forEach(function (key) {
+      var on = key === activeSide;
+      tabs[key].classList.toggle('on', on);
+      tabs[key].setAttribute('aria-selected', on ? 'true' : 'false');
+      tabs[key].tabIndex = on ? 0 : -1;
+    });
+    $('ledger').setAttribute('aria-labelledby', activeSide === 'mb' ? 'tabMb' : 'tabJm');
+
+    disarmReset();
+    $('resetBtn').textContent = resetLabel();
+  }
+
+  function switchSide(next, focusTab) {
+    if (activeSide === next) return;
+    activeSide = next;
+    ledger = state[activeSide];
+    selectedDay = todayDay() || 1;
+    renderSide();
+    renderAll();
+    scheduleSave();
+    if (focusTab) $(next === 'mb' ? 'tabMb' : 'tabJm').focus();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Events
+   * ------------------------------------------------------------------ */
+
+  var tabOrder = ['mb', 'jm'];
+
+  ['mb', 'jm'].forEach(function (key) {
+    var el = $(key === 'mb' ? 'tabMb' : 'tabJm');
+    el.addEventListener('click', function () { switchSide(key); });
+    el.addEventListener('keydown', function (ev) {
+      var i = tabOrder.indexOf(key);
+      var next = null;
+      if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = tabOrder[(i + 1) % tabOrder.length];
+      else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = tabOrder[(i + tabOrder.length - 1) % tabOrder.length];
+      else if (ev.key === 'Home') next = tabOrder[0];
+      else if (ev.key === 'End') next = tabOrder[tabOrder.length - 1];
+      if (!next) return;
+      ev.preventDefault();
+      if (next === activeSide) $(next === 'mb' ? 'tabMb' : 'tabJm').focus();
+      else switchSide(next, true);
+    });
+  });
+
+  $('startDate').addEventListener('change', function (ev) {
+    ledger.startDate = ev.target.value || null;
+    var today = todayDay();
+    if (today) selectedDay = today;
+    renderAll();
+    scheduleSave();
+  });
+
+  $('prevDay').addEventListener('click', function () { selectDay(selectedDay - 1); });
+  $('nextDay').addEventListener('click', function () { selectDay(selectedDay + 1); });
+
+  $('vaultToggle').addEventListener('click', function () {
+    var body = $('vaultBody');
+    body.hidden = !body.hidden;
+    this.textContent = body.hidden ? 'Open' : 'Close';
+    this.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+    if (!body.hidden) renderVaultCode();
+  });
+
+  $('vaultCode').addEventListener('focus', function (ev) { ev.target.select(); });
+
+  $('copyCode').addEventListener('click', async function () {
+    renderVaultCode();
+    var code = $('vaultCode').value;
+    try {
+      await navigator.clipboard.writeText(code);
+      setVaultMsg('Copied ✓ — keep it somewhere safe', true);
+    } catch (e) {
+      var input = $('vaultCode');
+      input.focus();
+      input.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e2) { /* ignore */ }
+      setVaultMsg(ok ? 'Copied ✓ — keep it somewhere safe' : 'Long-press the code above to copy it', ok);
+    }
+  });
+
+  var RESTORE_ERRORS = {
+    empty: 'Paste a vault code first',
+    charset: 'That code has characters that aren’t part of a vault code. Re-copy it.',
+    version: 'That code isn’t a 75 Days Soft vault code.',
+    length: 'That code is incomplete — some characters are missing. Re-copy the whole thing.',
+    checksum: 'That code didn’t check out — a character looks altered. Re-copy it.'
+  };
+
+  $('restoreBtn').addEventListener('click', function () {
+    var raw = $('restoreInput').value;
+    if (!raw.trim()) { setVaultMsg(RESTORE_ERRORS.empty); return; }
+
+    var result;
+    try {
+      result = decodeVault(raw);
+    } catch (e) {
+      setVaultMsg(RESTORE_ERRORS[e && e.message] || 'That code didn’t read. Check for missing characters and try again.');
+      return;
+    }
+
+    state[result.target] = result.data;
+    if (activeSide !== result.target) {
+      activeSide = result.target;
+      renderSide();
+    }
+    ledger = state[activeSide];
+    selectedDay = todayDay() || 1;
+    renderAll();
+    scheduleSave();
+    $('restoreInput').value = '';
+    setVaultMsg('Restored ✓ — ' + SIDES[result.target].name + '’s ledger is back', true);
+  });
+
+  var resetArmed = false;
+  var resetTimer = null;
+
+  function disarmReset() {
+    resetArmed = false;
+    clearTimeout(resetTimer);
+    var btn = $('resetBtn');
+    btn.classList.remove('arm');
+    btn.textContent = resetLabel();
+  }
+
+  $('resetBtn').addEventListener('click', function () {
+    if (!resetArmed) {
+      resetArmed = true;
+      this.classList.add('arm');
+      this.textContent = 'Tap again to confirm reset';
+      resetTimer = setTimeout(disarmReset, 3500);
+      return;
+    }
+    disarmReset();
+    state[activeSide] = { startDate: null, days: {} };
+    ledger = state[activeSide];
+    selectedDay = 1;
+    renderAll();
+    scheduleSave();
+    if (!vaultOnly) {
+      var msg = SIDES[activeSide].name + '’s ledger cleared';
+      setStatus(msg, true);
+      clearStatusLater(msg);
+    }
+  });
+
+  /* ------------------------------------------------------------------ *
+   * Build the phase grids, then boot
+   * ------------------------------------------------------------------ */
+
+  // Keep the printed milestone list tied to the constant, so it cannot drift.
+  (function fillMilestoneList() {
+    var el = $('milestoneList');
+    if (el) el.textContent = MILESTONES.join(', ');
+  })();
+
+  (function buildGrids() {
+    var host = $('phases');
+    PHASES.forEach(function (phase) {
+      var label = document.createElement('div');
+      label.className = 'phase-label';
+      label.innerHTML = '<b>Phase ' + phase[0] + '</b> Days ' + phase[1] + '–' + phase[2];
+      host.appendChild(label);
+
+      var grid = document.createElement('div');
+      grid.className = 'grid';
+      for (var day = phase[1]; day <= phase[2]; day++) {
+        var tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'tile';
+        tile.textContent = day;
+        tile.setAttribute('aria-label', 'Day ' + day);
+        if (isMilestone(day)) tile.classList.add('photo');
+        (function (n) {
+          tile.addEventListener('click', function () { selectDay(n, true); });
+        })(day);
+        grid.appendChild(tile);
+        tiles[day] = tile;
+      }
+      host.appendChild(grid);
+    });
+  })();
+
+  // Paint the empty ledger straight away. loadAll() can wait several seconds
+  // for a host storage bridge, and the day panel must not sit blank until then.
+  renderSide();
+  renderAll();
+
+  loadAll().then(function () {
+    renderSide();
+    selectedDay = todayDay() || 1;
+    renderAll();
+  }).catch(function () {
+    renderSide();
+    renderAll();
+  });
+})();
+</script>
+</body>
+</html>
