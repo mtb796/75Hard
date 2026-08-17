@@ -63,7 +63,7 @@ console.log('\n[2] localStorage persistence (finding #2)');
   const page = await ctx.newPage();
   await page.goto(PAGE);
   await page.waitForFunction(() => document.querySelectorAll('.tile').length === 75);
-  await page.waitForTimeout(4600); // outlast the 4s host wait
+  await page.waitForTimeout(300);
 
   await page.fill('#startDate', '2026-08-10');
   await page.dispatchEvent('#startDate', 'change');
@@ -77,12 +77,12 @@ console.log('\n[2] localStorage persistence (finding #2)');
   ok('record has updatedAt', stored && JSON.parse(stored).updatedAt > 0);
 
   const status = await page.textContent('#status');
-  ok('status reports a device save', /saved/i.test(status), status);
+  ok('status reports a save', /saved/i.test(status), status);
 
   // Reload in the same context → data must survive.
   await page.reload();
   await page.waitForFunction(() => document.querySelectorAll('.tile').length === 75);
-  await page.waitForTimeout(4600);
+  await page.waitForTimeout(300);
   const date = await page.inputValue('#startDate');
   const checked = await page.$$eval('#habitList button.checked', els => els.length);
   ok('start date survived reload', date === '2026-08-10', date);
@@ -91,68 +91,72 @@ console.log('\n[2] localStorage persistence (finding #2)');
 }
 
 /* ================================================================== */
-console.log('\n[3] Late host storage is NOT clobbered (finding #3)');
+console.log('\n[3] Tapping the instant the page opens must not erase history');
 {
-  // A bridge that only appears after 6s — past the 4s load wait.
-  const init = () => {
-    window.__hostWrites = [];
-    setTimeout(() => {
-      window.storage = {
-        get: async () => ({ value: JSON.stringify({ v: 2, active: 'mb', updatedAt: 999,
-          mb: { startDate: '2020-01-01', days: { 1: { workout: true } } },
-          jm: { startDate: null, days: {} } }) }),
-        set: async (k, v) => { window.__hostWrites.push(v); return true; }
-      };
-    }, 6000);
-  };
-  const ctx = await browser.newContext();
+  // The regression that mattered: the page used to wait several seconds for an
+  // optional storage bridge before reading anything, showing an empty ledger
+  // that looked ready. A tap in that window saved over the real record.
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
-  await page.addInitScript(init);
   await page.goto(PAGE);
-  await page.waitForFunction(() => document.querySelectorAll('.tile').length === 75);
-  await page.waitForTimeout(7000); // load gave up at 4s; bridge arrived at 6s
+  await page.evaluate(() => {
+    const days = {};
+    for (let d = 1; d <= 20; d++) days[d] = { workout: true, diet: true, book: true, water: true, sleep: true };
+    localStorage.setItem('banks75soft:duo', JSON.stringify({
+      v: 2, active: 'mb', updatedAt: 1000,
+      mb: { startDate: '2026-07-28', days }, jm: { startDate: null, days: {} } }));
+  });
 
-  const status = await page.textContent('#status');
-  ok('no premature host warning before any save', status === '' || /this device/i.test(status), status);
+  // 'commit' returns the moment navigation starts, so we act in the window a
+  // real person acts in rather than after the load event has settled.
+  await page.goto(PAGE, { waitUntil: 'commit' });
+  await page.waitForFunction(() => document.querySelectorAll('#habitList button').length === 6, null, { timeout: 15000 });
 
-  await page.click('#habitList button >> nth=0');
-  await page.waitForTimeout(1200);
+  const atFirstPaint = await page.evaluate(() => ({
+    date: document.getElementById('startDate').value,
+    panel: document.getElementById('pTitle').textContent
+  }));
+  ok('saved data is on screen as soon as the page is usable', atFirstPaint.date === '2026-07-28', atFirstPaint.date);
+  ok('opens on the correct day, not day 1', atFirstPaint.panel === 'DAY 21', atFirstPaint.panel);
 
-  const writes = await page.evaluate(() => window.__hostWrites);
-  ok('never wrote to the late bridge', writes.length === 0, JSON.stringify(writes));
+  await page.tap('#habitList button >> nth=0');
+  await page.waitForTimeout(1500);
+  const mid = await page.evaluate(() => JSON.parse(localStorage.getItem('banks75soft:duo')));
+  ok('an immediate tap keeps every prior day', Object.keys(mid.mb.days).length === 21, String(Object.keys(mid.mb.days).length));
+  ok('an immediate tap keeps the start date', mid.mb.startDate === '2026-07-28', String(mid.mb.startDate));
 
-  const local = await page.evaluate(() => window.localStorage.getItem('banks75soft:duo'));
-  ok('still autosaved locally', !!local);
-  const after = await page.textContent('#status');
-  ok('warns that sync needs a reload', /reload to sync/i.test(after), after);
+  await page.waitForTimeout(5000);
+  const settled = await page.evaluate(() => JSON.parse(localStorage.getItem('banks75soft:duo')));
+  ok('history still intact once everything settles', Object.keys(settled.mb.days).length === 21,
+     String(Object.keys(settled.mb.days).length));
   await ctx.close();
 }
 
 /* ================================================================== */
-console.log('\n[4] Host storage present on time → used normally');
+console.log('\n[4] Saving is immediate and survives repeated reopening');
 {
-  const init = () => {
-    window.__hostWrites = [];
-    window.storage = {
-      get: async () => ({ value: JSON.stringify({ v: 2, active: 'jm', updatedAt: 5000,
-        mb: { startDate: null, days: {} },
-        jm: { startDate: '2026-01-01', days: { 3: { workout: true, diet: true } } } }) }),
-      set: async (k, v) => { window.__hostWrites.push(v); return true; }
-    };
-  };
-  const { ctx, page, errors } = await newPage({ init, settle: 600 });
-  const eyebrow = await page.textContent('#eyebrow');
-  ok('adopted host record incl. active side', eyebrow === 'Janel Moore', eyebrow);
-  const date = await page.inputValue('#startDate');
-  ok('adopted host start date', date === '2026-01-01', date);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.goto(PAGE);
+  await page.waitForFunction(() => document.querySelectorAll('.tile').length === 75);
 
-  await page.click('#habitList button >> nth=0');
-  await page.waitForTimeout(900);
-  const writes = await page.evaluate(() => window.__hostWrites);
-  ok('wrote back to host', writes.length >= 1, String(writes.length));
-  const status = await page.textContent('#status');
-  ok('status is plain Saved', status === '✓ Saved', status);
-  ok('no page errors', errors.length === 0, errors.join('|'));
+  await page.fill('#startDate', '2026-08-01');
+  await page.dispatchEvent('#startDate', 'change');
+  await page.waitForTimeout(700);
+
+  // Reopen ten times, adding one habit each visit. Nothing may be lost.
+  for (let visit = 0; visit < 10; visit++) {
+    await page.goto(PAGE, { waitUntil: 'commit' });
+    await page.waitForFunction(() => document.querySelectorAll('#habitList button').length === 6, null, { timeout: 15000 });
+    await page.tap(`#phases .grid >> nth=0 >> .tile >> nth=${visit}`);
+    await page.waitForTimeout(120);
+    await page.tap('#habitList button >> nth=0');
+    await page.waitForTimeout(700);
+  }
+  const rec = await page.evaluate(() => JSON.parse(localStorage.getItem('banks75soft:duo')));
+  const marked = Object.keys(rec.mb.days).length;
+  ok('ten reopen-and-tap cycles all persisted', marked === 10, `${marked} of 10`);
+  ok('start date survived all ten', rec.mb.startDate === '2026-08-01', String(rec.mb.startDate));
   await ctx.close();
 }
 
@@ -368,7 +372,7 @@ console.log('\n[8] Vault-only mode when nothing can store');
   await page.addInitScript(init);
   await page.goto(PAGE);
   await page.waitForFunction(() => document.querySelectorAll('.tile').length === 75);
-  await page.waitForTimeout(4800);
+  await page.waitForTimeout(600);
 
   const status = await page.textContent('#status');
   ok('falls back to vault mode', /vault/i.test(status), status);
@@ -457,7 +461,7 @@ console.log('\n[10] Every button works and persists');
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(PAGE);
   await page.waitForFunction(() => document.querySelectorAll('.tile').length === 75);
-  await page.waitForTimeout(4600);
+  await page.waitForTimeout(300);
 
   const read = () => page.evaluate(() => JSON.parse(localStorage.getItem('banks75soft:duo') || 'null'));
 

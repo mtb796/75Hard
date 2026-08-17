@@ -635,10 +635,10 @@ footer { text-align:center; margin-top:30px; }
       <button id="vaultToggle" class="vault-toggle" aria-expanded="false" aria-controls="vaultBody">Open</button>
     </div>
     <p class="vault-note">
-      Progress saves to this device automatically, and to the host app when one is
-      available. Vault codes are the portable copy — MB75 for Malik, JM75 for Janel.
-      Copy yours to move a ledger to another device, or paste either code here to restore it.
-    </p>
+      Progress saves to this device as you tap — nothing to press, nothing to
+      sign into. A vault code is a copy of one side's whole ledger as text: copy
+      it to move Malik or Janel to another phone, or paste one in to restore.
+      Codes are per side, so one can never overwrite the other.</p>
     <div id="vaultBody" hidden>
       <label class="vault-label" for="vaultCode" id="vaultCodeLabel">Current vault code — Malik</label>
       <div class="vault-row">
@@ -763,8 +763,6 @@ footer { text-align:center; margin-top:30px; }
 
   var STORE_KEY = 'banks75soft:duo';
   var LEGACY_KEYS = ['banks75soft:ledger', 'banks-75soft-v1'];
-  var HOST_WAIT_MS = 4000;
-  var MSG_LOCAL_ONLY = 'Saved on this device · reload to sync';
 
   /* ------------------------------------------------------------------ *
    * State
@@ -783,7 +781,6 @@ footer { text-align:center; margin-top:30px; }
 
   // Persistence capability flags, resolved once at startup.
   var localOk = false;       // localStorage is readable and writable
-  var hostConfirmed = false; // window.storage answered a read; safe to write
   var vaultOnly = false;     // no automatic layer at all
 
   /* ------------------------------------------------------------------ *
@@ -900,30 +897,6 @@ footer { text-align:center; margin-top:30px; }
     }
   }
 
-  function hostReady() {
-    return !!(window.storage && typeof window.storage.get === 'function');
-  }
-
-  function waitForHost(ms) {
-    return new Promise(function (resolve) {
-      var started = Date.now();
-      (function poll() {
-        if (hostReady()) return resolve(true);
-        if (Date.now() - started >= ms) return resolve(false);
-        setTimeout(poll, 150);
-      })();
-    });
-  }
-
-  async function hostGet(key) {
-    try {
-      var r = await window.storage.get(key, false);
-      return r && r.value ? r.value : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
   function serialize() {
     return JSON.stringify({
       v: 2,
@@ -944,39 +917,18 @@ footer { text-align:center; margin-top:30px; }
         return {
           mb: o.mb || { startDate: null, days: {} },
           jm: o.jm || { startDate: null, days: {} },
-          active: SIDES[o.active] ? o.active : 'mb',
-          updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : 0
+          active: SIDES[o.active] ? o.active : 'mb'
         };
       }
       if ('days' in o || 'startDate' in o) {
         return {
           mb: { startDate: o.startDate || null, days: o.days || {} },
           jm: { startDate: null, days: {} },
-          active: 'mb',
-          updatedAt: 0
+          active: 'mb'
         };
       }
-    } catch (e) { /* corrupt record; fall through */ }
+    } catch (e) { /* unreadable record; start clean rather than throw */ }
     return null;
-  }
-
-  function recordWeight(rec) {
-    if (!rec) return -1;
-    var n = 0;
-    ['mb', 'jm'].forEach(function (s) {
-      if (rec[s].startDate) n++;
-      n += Object.keys(rec[s].days || {}).length;
-    });
-    return n;
-  }
-
-  // Prefer the more recently written record; fall back to the fuller one
-  // when neither carries a timestamp (records written by the old build).
-  function pickRecord(a, b) {
-    if (!a) return b;
-    if (!b) return a;
-    if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
-    return recordWeight(a) >= recordWeight(b) ? a : b;
   }
 
   function applyRecord(rec) {
@@ -987,35 +939,18 @@ footer { text-align:center; margin-top:30px; }
     ledger = state[activeSide];
   }
 
-  async function loadAll() {
+  // Synchronous, and called before the first paint.
+  //
+  // This used to wait up to four seconds for an optional host-provided storage
+  // bridge before reading anything. The page spent those seconds showing an
+  // empty ledger that looked ready, and a tap in that window was saved over
+  // the top of the real record — destroying every day behind it. localStorage
+  // is synchronous and needs no waiting, so that window no longer exists.
+  function loadNow() {
     localOk = probeLocalStorage();
-
-    // Wait for a host-provided storage bridge, if this build is embedded in one.
-    hostConfirmed = await waitForHost(HOST_WAIT_MS);
-
-    var hostRec = null;
-    if (hostConfirmed) {
-      var json = await hostGet(STORE_KEY);
-      if (!json) {
-        for (var i = 0; i < LEGACY_KEYS.length && !json; i++) {
-          json = await hostGet(LEGACY_KEYS[i]);
-        }
-      }
-      hostRec = parseRecord(json);
-    }
-
-    var localRec = parseRecord(readLocal());
-    applyRecord(pickRecord(hostRec, localRec));
-
-    vaultOnly = !localOk && !hostConfirmed;
-    if (vaultOnly) {
-      enterVaultMode('No storage is available in this viewer.');
-    } else if (!hostConfirmed && hostReady()) {
-      setStatus(MSG_LOCAL_ONLY);
-    } else if (hostRec && localRec && hostRec !== localRec) {
-      // Converge the two layers on whichever record won.
-      scheduleSave();
-    }
+    applyRecord(parseRecord(readLocal()));
+    vaultOnly = !localOk;
+    if (vaultOnly) enterVaultMode('This browser will not let the page store anything.');
   }
 
   function enterVaultMode(reason) {
@@ -1031,7 +966,7 @@ footer { text-align:center; margin-top:30px; }
     setVaultMsg(reason + ' Copy your vault code when you finish a session, then paste it back next time.', true);
   }
 
-  async function save(attempt) {
+  function save() {
     if (vaultOnly) {
       renderVaultCode();
       setStatus('Vault code updated — copy to keep', true);
@@ -1041,45 +976,22 @@ footer { text-align:center; margin-top:30px; }
       return;
     }
 
-    var json = serialize();
-    var wroteLocal = localOk && writeLocal(json);
-    var wroteHost = false;
-
-    if (hostConfirmed) {
-      try {
-        wroteHost = !!(await window.storage.set(STORE_KEY, json, false));
-      } catch (e) {
-        wroteHost = false;
-      }
-      if (!wroteHost && !wroteLocal) {
-        if (attempt < 2) {
-          setStatus('Retrying…');
-          setTimeout(function () { save(attempt + 1); }, 700 * (attempt + 1));
-          return;
-        }
-        enterVaultMode('Autosave is blocked in this viewer.');
-        return;
-      }
-    }
-
-    if (!wroteLocal && !wroteHost) {
-      enterVaultMode('Autosave is blocked in this viewer.');
+    if (writeLocal(serialize())) {
+      setStatus('\u2713 Saved', true);
+      clearStatusLater('\u2713 Saved');
       return;
     }
 
-    // A bridge that appeared after the load window stays read-only for this
-    // session: writing to it would replace real saved progress with the empty
-    // ledger we rendered while waiting. Say so instead of silently diverging.
-    var msg = wroteHost ? '✓ Saved'
-      : (!hostConfirmed && hostReady() ? MSG_LOCAL_ONLY : '✓ Saved on this device');
-    setStatus(msg, true);
-    clearStatusLater(msg);
+    // A write that fails here is a real refusal by the browser — private mode,
+    // a blocked origin, or a full quota — not a timing problem. Fall back to
+    // vault codes so the session is still recoverable.
+    enterVaultMode('This browser refused to store the last change.');
   }
 
   function scheduleSave() {
     if (!vaultOnly) setStatus('Saving…');
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () { save(0); }, 450);
+    saveTimer = setTimeout(save, 450);
   }
 
   /* ------------------------------------------------------------------ *
@@ -1533,25 +1445,16 @@ footer { text-align:center; margin-top:30px; }
     });
   })();
 
-  // Paint the empty ledger straight away. loadAll() can wait several seconds
-  // for a host storage bridge, and the day panel must not sit blank until then.
+  // Read saved progress first, then paint once. Nothing is shown before the
+  // real data is in hand, so what you see is always what is stored.
+  loadNow();
+  selectedDay = todayDay() || 1;
   renderSide();
   renderAll();
 
-  // The grids and habit list are built by now, so the page is usable. Clear the
-  // boot warning before the watchdog fires; storage loading continues below.
   window.__ok = 1;
   var bootWarn = $('bootWarn');
   if (bootWarn) bootWarn.remove();
-
-  loadAll().then(function () {
-    renderSide();
-    selectedDay = todayDay() || 1;
-    renderAll();
-  }).catch(function () {
-    renderSide();
-    renderAll();
-  });
 })();
 </script>
 </body>

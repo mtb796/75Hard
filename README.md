@@ -40,20 +40,30 @@ complete it, so the streak only breaks once a *finished* day is missed.
 
 ## Saving
 
-Three layers, in order of preference:
+`localStorage`, read synchronously before the first paint and written on every
+change. That is the whole mechanism.
 
-1. **`localStorage`** — always on, saves as you tap.
-2. **Host bridge (`window.storage`)** — used when the page is embedded in a host
-   that provides one. The page waits up to 4s at startup for it to appear.
-3. **Vault codes** — the portable copy, and the fallback when neither works.
+It is deliberately that plain. An earlier version also waited up to four seconds
+at startup for an optional host-provided storage bridge before reading anything,
+which meant the page spent those seconds displaying an empty ledger that looked
+ready — and a tap in that window was saved over the top of the real record,
+destroying the history behind it. The bridge is gone. There is no longer any
+point at which the screen and the stored data disagree.
 
-When both layers hold a record, the newer `updatedAt` wins; records written
-before timestamps existed fall back to whichever holds more data.
+Vault codes remain, for the one thing local storage genuinely cannot do: move a
+ledger to another device.
 
-**The page will not write to a host bridge it never successfully read from.** If
-the bridge appears after the 4s window, autosave stays on `localStorage` and the
-status reads *"Saved on this device · reload to sync"*. Writing to a late bridge
-would overwrite real saved progress with the empty ledger rendered while waiting.
+### What still will not persist
+
+Storage is per-origin and per-browser, so these are expected, not bugs:
+
+- **Different URLs are different storage.** A GitHub Pages address and a Vercel
+  address each keep their own copy. Pick one and stick to it.
+- **Add to Home Screen on iOS is a separate bucket** from Safari itself. Set the
+  ledger up from the icon you will actually use day to day.
+- **Private browsing** discards everything on close.
+- **Two phones never merge.** Each device holds its own ledger; vault codes are
+  how progress crosses between them.
 
 ### Moving a ledger between phones
 
@@ -90,6 +100,8 @@ reorder or retune them — add a new version instead.
 - `100dvh` and `env(safe-area-inset-*)` keep content clear of browser chrome,
   notches and the home indicator.
 - `theme-color` follows the active side, so the browser bar matches the page.
+- Saved progress is on screen the moment the page is usable — there is no window
+  where an early tap can overwrite it.
 
 ## Fonts
 
@@ -111,6 +123,6 @@ CHROME_PATH=/path/to/chrome npm test   # or just `npm test` if Playwright's brow
 ```
 
 Covers habit/rules parity, `localStorage` round-trips across a reload, the
-late-bridge clobber guard, vault codec round-trips and every rejection path, v1
+the immediate-tap regression above, vault codec round-trips and every rejection path, v1
 backward compatibility, the day-counter states, keyboard and ARIA behavior,
 mobile layout and tap targets, and every button driving a real persisted change.
